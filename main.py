@@ -13,7 +13,7 @@ init(autoreset=True)
 NUM_FILOSOFOS = 5
 
 # Limite de ciclos de comer para cada filósofo
-MAX_CICLOS = 3
+MAX_CICLOS = 5
 
 # Tempo máximo de espera para evitar starvation (em segundos)
 TEMPO_MAX_ESPERA = 10
@@ -26,6 +26,7 @@ class Estado:
     PENSANDO = 0
     COM_FOME = 1
     COMENDO = 2
+    TERMINADO = 3
 
 # Semáforos para representar os garfos
 garfos = [threading.Semaphore(1) for _ in range(NUM_FILOSOFOS)]
@@ -38,6 +39,7 @@ ESTADO_CORES = {
     "Pensando": "lightblue",
     "Com fome": "orange",
     "Comendo": "green",
+    "Terminado": "gray"  
 }
 
 
@@ -46,25 +48,33 @@ class JantarFilosofos:
     def __init__(self, root):
         self.root = root
         self.root.title("Jantar dos Filósofos")
-        self.canvas = tk.Canvas(root, width=500, height=500)
+        self.canvas = tk.Canvas(root, width=500, height=600)
         self.canvas.pack()
         self.estados = ["Pensando" for _ in range(NUM_FILOSOFOS)]
         self.tempos = [{"pensando": 0, "esperando": 0, "comendo": 0} for _ in range(NUM_FILOSOFOS)]
         self.filosofo_pos = self.calcular_posicoes_circulares(250, 250, 150, NUM_FILOSOFOS)
-        self.garfo_pos = self.calcular_posicoes_circulares(250, 250, 100, NUM_FILOSOFOS)
+        self.garfo_pos = self.calcular_posicoes_circulares(250, 250, 100, NUM_FILOSOFOS, self.filosofo_pos)
         self.circulos = []
         self.desenha_filosofos()
         self.desenha_garfos()
         self.desenha_legenda()
 
-    def calcular_posicoes_circulares(self, centro_x, centro_y, raio, num_elementos):
+    def calcular_posicoes_circulares(self, centro_x, centro_y, raio, num_elementos, posicoes_filosofos=None):
         """Calcula posições circulares para os elementos (filósofos ou garfos)."""
         posicoes = []
-        for i in range(num_elementos):
-            angulo = 2 * math.pi * i / num_elementos
-            x = centro_x + raio * math.cos(angulo)
-            y = centro_y + raio * math.sin(angulo)
-            posicoes.append((x, y))
+        if posicoes_filosofos is None:  # Calcula posições dos filósofos
+            for i in range(num_elementos):
+                angulo = 2 * math.pi * i / num_elementos
+                x = centro_x + raio * math.cos(angulo)
+                y = centro_y + raio * math.sin(angulo)
+                posicoes.append((x, y))
+        else:  # Calcula posições dos garfos
+            for i in range(num_elementos):
+                x1, y1 = posicoes_filosofos[i]
+                x2, y2 = posicoes_filosofos[(i + 1) % num_elementos]
+                x = (x1 + x2) / 2
+                y = (y1 + y2) / 2
+                posicoes.append((x, y))
         return posicoes
 
     def desenha_filosofos(self):
@@ -85,12 +95,18 @@ class JantarFilosofos:
 
     def desenha_legenda(self):
         self.canvas.create_text(50, 400, text="Legenda:", font=("Arial", 10, "bold"))
+        
         self.canvas.create_rectangle(40, 420, 90, 440, fill="lightblue")
         self.canvas.create_text(100, 430, text="Pensando", anchor=tk.W)
+        
         self.canvas.create_rectangle(40, 450, 90, 470, fill="orange")
         self.canvas.create_text(100, 460, text="Com Fome", anchor=tk.W)
+        
         self.canvas.create_rectangle(40, 480, 90, 500, fill="green")
         self.canvas.create_text(100, 490, text="Comendo", anchor=tk.W)
+        
+        self.canvas.create_rectangle(40, 510, 90, 530, fill="gray")
+        self.canvas.create_text(100, 520, text="Terminou", anchor=tk.W)
 
     def atualizar_estado(self, id, novo_estado):
         self.root.after(0, self._atualizar_estado, id, novo_estado)
@@ -160,8 +176,11 @@ def filosofo(id, jantar, max_ciclos, relatorios_finais):
                 if id == proximo_filosofo_na_fila() and pode_comer(id):
                     estado[id] = Estado.COMENDO
                     jantar.atualizar_estado(id, "Comendo")
-                    jantar.atualizar_garfo(id, "ocupado")
-                    jantar.atualizar_garfo((id + 1) % NUM_FILOSOFOS, "ocupado")
+                    # Corrigindo a atualização dos garfos
+                    garfo_esquerda = (id - 1) % NUM_FILOSOFOS  # Calcula o ID do garfo à esquerda
+                    jantar.atualizar_garfo(garfo_esquerda, "ocupado")  # Atualiza o garfo à esquerda
+                    jantar.atualizar_garfo(id, "ocupado")  # Atualiza o garfo à direita
+
                     print(f"{cores[id]}Filósofo {id+1} está comendo. \n")
                     inicio_comer = time.time()
                     time.sleep(random.uniform(1, 3))
@@ -169,10 +188,12 @@ def filosofo(id, jantar, max_ciclos, relatorios_finais):
                     jantar.atualiza_interface()
 
                     # Libera os garfos após comer
+                    garfos[garfo_esquerda].release() 
                     garfos[id].release()
-                    garfos[(id + 1) % NUM_FILOSOFOS].release()
-                    jantar.atualizar_garfo(id, "livre")
-                    jantar.atualizar_garfo((id + 1) % NUM_FILOSOFOS, "livre")
+
+                    # Corrigindo a liberação dos garfos
+                    jantar.atualizar_garfo(garfo_esquerda, "livre")  # Libera o garfo à esquerda
+                    jantar.atualizar_garfo(id, "livre")  # Libera o garfo à direita
 
                     estado[id] = Estado.PENSANDO
                     ciclos += 1
@@ -187,7 +208,8 @@ def filosofo(id, jantar, max_ciclos, relatorios_finais):
 
         if tempo_esperando >= TEMPO_MAX_ESPERA:
             print(f"Filósofo {id+1} desistiu de comer por agora (starvation).\n")
-
+            
+    jantar.atualizar_estado(id, "Terminado") 
     # Relatório final do filósofo
     relatorios_finais.append((id, f"{cores[id]}=== Relatório Filósofo {id + 1} ===\n"
                                   f"Tempo pensando: {jantar.tempos[id]['pensando']:.2f} segundos\n"
