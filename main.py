@@ -42,6 +42,8 @@ ESTADO_CORES = {
     "Terminado": "gray"  
 }
 
+# Contador de refeições para cada filósofo
+refeicoes = [0 for _ in range(NUM_FILOSOFOS)]
 
 # Criação da interface gráfica
 class JantarFilosofos:
@@ -95,16 +97,16 @@ class JantarFilosofos:
 
     def desenha_legenda(self):
         self.canvas.create_text(50, 400, text="Legenda:", font=("Arial", 10, "bold"))
-        
+
         self.canvas.create_rectangle(40, 420, 90, 440, fill="lightblue")
         self.canvas.create_text(100, 430, text="Pensando", anchor=tk.W)
-        
+
         self.canvas.create_rectangle(40, 450, 90, 470, fill="orange")
         self.canvas.create_text(100, 460, text="Com Fome", anchor=tk.W)
-        
+
         self.canvas.create_rectangle(40, 480, 90, 500, fill="green")
         self.canvas.create_text(100, 490, text="Comendo", anchor=tk.W)
-        
+
         self.canvas.create_rectangle(40, 510, 90, 530, fill="gray")
         self.canvas.create_text(100, 520, text="Terminou", anchor=tk.W)
 
@@ -125,7 +127,7 @@ class JantarFilosofos:
 
     def atualiza_interface(self):
         self.root.update()
-        
+
 # Semáforo para controlar o acesso aos garfos
 mutex = threading.Semaphore(1)
 
@@ -134,10 +136,10 @@ fila_prioridade = []
 
 # Funções para gerenciar a fila de prioridade
 def adicionar_filosofo_na_fila(id, tempo_espera):
-    heapq.heappush(fila_prioridade, (tempo_espera, id))
+    heapq.heappush(fila_prioridade, (refeicoes[id], tempo_espera, id))
 
 def proximo_filosofo_na_fila():
-    return heapq.heappop(fila_prioridade)[1]
+    return heapq.heappop(fila_prioridade)[2]
 
 # Função para verificar se um filósofo pode pegar os garfos
 def pode_comer(id):
@@ -161,7 +163,7 @@ def filosofo(id, jantar, max_ciclos, relatorios_finais):
         jantar.atualiza_interface()
 
         # Filósofo com fome
-        estado[id] = Estado.COM_FOME
+        estado[id]= Estado.COM_FOME
         jantar.atualizar_estado(id, "Com fome")
         print(f"{cores[id]}Filósofo {id+1} está com fome. \n")
         inicio_espera = time.time()
@@ -196,6 +198,7 @@ def filosofo(id, jantar, max_ciclos, relatorios_finais):
                     jantar.atualizar_garfo(id, "livre")  # Libera o garfo à direita
 
                     estado[id] = Estado.PENSANDO
+                    refeicoes[id] += 1  # Incrementa o contador de refeições
                     ciclos += 1
                     break
                 else:
@@ -215,7 +218,7 @@ def filosofo(id, jantar, max_ciclos, relatorios_finais):
                                   f"Tempo pensando: {jantar.tempos[id]['pensando']:.2f} segundos\n"
                                   f"Tempo esperando: {jantar.tempos[id]['esperando']:.2f} segundos\n"
                                   f"Tempo comendo: {jantar.tempos[id]['comendo']:.2f} segundos\n"
-                                  "=========================\n" + Style.RESET_ALL))
+                                  "=========================\n"))
     
 # Função principal para iniciar o jantar e a interface
 def main():
